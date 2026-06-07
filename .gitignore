@@ -1,0 +1,7 @@
+# Runtime state — never commit spend/position ledgers
+state_live.json
+state_dry.json
+daily_spend.json
+cooldown_state.json
+__pycache__/
+*.pyc

@@ -21,12 +21,25 @@ def _norm(text):
     return unicodedata.normalize("NFKD", text or "")
 
 
-def find_group_sets(client, limit=120):
+def _fetch_markets(client, query, limit):
+    """Docs show get_markets(q=..., limit=...) but shipped SDKs differ on the search kwarg.
+    Try known variants, then fall back to an unfiltered fetch — we regex-filter locally anyway,
+    so server-side search is an optimization, not a requirement."""
+    for kwargs in ({"q": query, "limit": limit}, {"query": query, "limit": limit},
+                   {"search": query, "limit": limit}, {"limit": limit}):
+        try:
+            return client.get_markets(**kwargs)
+        except TypeError:
+            continue
+    return client.get_markets()
+
+
+def find_group_sets(client, limit=200):
     """Return {letter: [markets]} for active group-winner markets, deduped by id."""
     seen = {}
     for q in SEARCH_QUERIES:
         try:
-            for m in client.get_markets(q=q, limit=limit):
+            for m in _fetch_markets(client, q, limit):
                 if getattr(m, "status", "active") != "active":
                     continue
                 match = GROUP_RE.search(_norm(getattr(m, "question", "")))

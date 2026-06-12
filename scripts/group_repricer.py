@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from simmer_sdk import SimmerClient  # noqa: E402
 
 import state as st                    # noqa: E402
-from discovery import find_group_sets, is_confirmed_exclusive  # noqa: E402
+from discovery import discover, format_report, is_confirmed_exclusive  # noqa: E402
 from strategy import config, repricing_decisions, coherence_decision, ask_price  # noqa: E402
 
 SKILL_SLUG = "polymarket-worldcup-group-repricer"
@@ -92,9 +92,17 @@ def run(venue, live):
     client = SimmerClient.from_env(venue=venue) if live else \
         SimmerClient.from_env(venue=venue, live=False)
 
-    groups = find_group_sets(client)
+    disc = discover(client)
+    print(format_report(disc))
+    print()
+
+    # Trade ACTIVE legs only. Importable candidates are surfaced in the report above but are NEVER
+    # sent to the execution path — they aren't tradeable until Simmer imports + prices them.
+    groups = {letter: [e["raw"] for e in g["active"]]
+              for letter, g in disc["groups"].items() if g["active"]}
     if not groups:
-        print("No group-winner markets found (pre-listing or discovery gap — see SKILL.md note).")
+        print("No active group-winner legs to trade "
+              "(see importable candidates above — pending Simmer import).")
         return
     with st.locked_state(live) as s:
         held = {k for k, v in s["positions"].items() if v["status"] == "open"}

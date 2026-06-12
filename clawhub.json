@@ -1,5 +1,6 @@
 {
   "emoji": "🏆",
+  "version": "0.2.0",
   "requires": {
     "pip": ["simmer-sdk"],
     "env": ["SIMMER_API_KEY"]

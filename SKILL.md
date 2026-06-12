@@ -3,7 +3,7 @@ name: polymarket-worldcup-group-repricer
 description: World Cup Groups skill — a market-dynamics play on group-winner sets. Buys group favorites at pre-tournament prices and trims after qualification "becomes obvious" and casual money reprices (bet on the repricing, not the champion), plus trades incoherent group market sets back toward consistency. Sim by default.
 metadata:
   author: "Nick (@BridgeAISocial)"
-  version: "0.1.0"
+  version: "0.2.0"
   displayName: "WC Group Repricer"
   difficulty: "intermediate"
 ---
@@ -18,7 +18,8 @@ A **Groups**-category skill for the 2026 World Cup built on *market dynamics*, n
    *(Strategy family credit: group-stage repricing ideas circulating on X.)*
 2. **Group-set coherence** — within a group's winner set (mutually exclusive, exhaustive), trade
    prices that sum incoherently back toward 1. Mutual exclusivity is **confirmed from market text**
-   (a complete 4-leg "win Group X" set) — if it can't be confirmed, the set is alerted, never arbed.
+   (a complete 4-leg group-winner set — "win Group X" *or* "finish first in Group X") — if it can't
+   be confirmed, the set is alerted, never arbed.
 3. **Elo anchor (tiebreak only)** — a static Elo table decides *which* leg of an incoherent set is
    the mispriced one. It never picks winners standalone.
 
@@ -55,8 +56,12 @@ Requires `SIMMER_API_KEY`.
 ## Known limitations (v0.1)
 1. `$SIM` (LMSR) has no order book — ask/spread/depth gates only bind on the real venue; sim
    validates *logic*, not microstructure.
-2. Market discovery uses a text search for "win Group X" sets; the canonical WC tag/series slug is
-   unverified upstream — discovery may need the paginated sports-markets workaround at launch.
+2. Discovery is **two-source**: the active Simmer venue (tradeable today) *and* the importable
+   upstream pool (`list_importable_markets`). Group-winner markets live upstream until Simmer
+   imports them, so importable candidates are **surfaced in the report but never traded** — they
+   only become tradeable once imported + priced. (Simmer's WC auto-importer hasn't imported the
+   group-winner event yet — likely an upstream `fifa-world-cup` tag mismatch, tracked Simmer-side;
+   until then the skill shows candidates without trading them.)
 3. Coherence legs are entered sequentially, not atomically; partial-fill unwind is basic.
 4. The exit threshold (`EXIT_REPRICE`) is the strategy's most sensitive knob — it ships at a
    reasonable default and is meant to be tuned in sim / by Autoresearch, not trusted blindly.

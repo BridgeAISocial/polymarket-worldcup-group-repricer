@@ -3,7 +3,7 @@ name: polymarket-worldcup-group-repricer
 description: World Cup Groups skill — a market-dynamics play on group-winner sets. Buys group favorites at pre-tournament prices and trims after qualification "becomes obvious" and casual money reprices (bet on the repricing, not the champion), plus trades incoherent group market sets back toward consistency. Sim by default.
 metadata:
   author: "Nick (@BridgeAISocial)"
-  version: "0.2.0"
+  version: "0.3.0"
   displayName: "WC Group Repricer"
   difficulty: "intermediate"
 ---
@@ -52,6 +52,42 @@ python scripts/group_repricer.py --status             # show positions/exposure
 python scripts/group_repricer.py --live --venue polymarket   # real money (after sim record)
 ```
 Requires `SIMMER_API_KEY`.
+
+## Daily recommendations (advisory — for Hermes)
+A second, **read-only** entrypoint produces a once-a-day *manual* betting sheet. It never trades,
+never touches position state, and needs no wallet — it just discovers markets and tells **you** what
+to place. It widens the lens beyond winners to **three families per group**, for **all 12 groups**:
+
+| Family | Example title | Structural odds |
+|---|---|---|
+| `qualifier` | "*advance / qualify / reach the knockout* from Group X" | 2 of 4 advance → usually safest |
+| `winner` | "*win / finish first in* Group X" | 1 of 4 |
+| `prop` | "most goals in Group X", placement specials, … | model-light → always **FLAGGED** |
+
+Each recommendation is a flat **$5** YES back, tagged with a risk tier and a plain-English thesis +
+payout. Tiers are **structural** (how many teams clear the bar, the team's Elo rank *within its
+group*, the price band, and whether it's tradeable yet) — not a guarantee:
+
+- **LOW** — structural favorite, tradeable now.
+- **MEDIUM** — solid but 1-of-4 or borderline.
+- **HIGH** — risky: longshot (`<22%`), weak Elo anchor, or not-yet-tradeable.
+- **FLAGGED** — props/specials, surfaced for your judgement (not endorsed).
+
+Importable-only markets (live upstream but not yet imported by Simmer) are **surfaced but flagged
+not-tradeable** — same two-source discovery as the trader.
+
+```bash
+python scripts/daily_recommender.py                     # human report to stdout
+python scripts/daily_recommender.py --json              # machine-readable (for Hermes/logs)
+python scripts/daily_recommender.py --out reports/$(date +%F).md   # also write to file
+python scripts/daily_recommender.py --max-risk medium   # hide HIGH/FLAGGED noise
+python scripts/daily_recommender.py --venue polymarket --live      # discover real markets (read-only)
+```
+
+Daily cron (Hermes): `0 13 * * *  python scripts/daily_recommender.py --out reports/$(date +\%F).md`
+
+Knobs (env): `STAKE_USD` (default `5`, falls back to `MAX_TRADE_USD`), `QUALIFIERS_PER_GROUP`
+(default `2`), `MAX_PROPS_PER_GROUP` (default `3`).
 
 ## Known limitations (v0.1)
 1. `$SIM` (LMSR) has no order book — ask/spread/depth gates only bind on the real venue; sim

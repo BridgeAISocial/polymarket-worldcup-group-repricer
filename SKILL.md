@@ -73,6 +73,11 @@ group*, the price band, and whether it's tradeable yet) — not a guarantee:
 - **HIGH** — risky: longshot (`<22%`), weak Elo anchor, or not-yet-tradeable.
 - **FLAGGED** — props/specials, surfaced for your judgement (not endorsed).
 
+Only explicit affirmative, single-team advancement titles receive the qualifier label.
+Negations, compound bets and conditional specials remain FLAGGED props. Group-rank bonuses
+require four distinct teams in winner/qualifier markets; incomplete coverage cannot receive LOW.
+Active markets without a valid price are not tradeable and cannot receive LOW.
+
 Importable-only markets (live upstream but not yet imported by Simmer) are **surfaced but flagged
 not-tradeable** — same two-source discovery as the trader.
 

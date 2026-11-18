@@ -13,6 +13,7 @@ Design choices:
     judge, not endorsed.
 """
 
+import math
 import os
 
 from strategy import ELO, team_for
@@ -40,27 +41,30 @@ def config():
 
 def _price_of(entry):
     p = entry.get("yes_price")
-    return float(p) if isinstance(p, (int, float)) else None
+    return float(p) if (isinstance(p, (int, float)) and not isinstance(p, bool)
+                        and math.isfinite(p) and 0 < p < 1) else None
 
 
 def _tradeable(entry):
-    return entry.get("source") == "active"
+    return entry.get("source") == "active" and _price_of(entry) is not None
 
 
 def _group_rank(entry, group_entries):
-    """1-based Elo rank of this entry's team among all teams named across the group (1 = strongest).
-    Returns (rank, n_known). Unknown team -> rank None."""
+    """1-based Elo rank across four distinct winner/qualifier teams (1 = strongest).
+    Returns (rank, n_known). Incomplete/ambiguous coverage or unknown team -> rank None."""
     team = team_for(entry["question"])
     if not team:
         return (None, 0)
     teams = []
-    for cat_entries in group_entries.values():
+    for category in ("winner", "qualifier"):
+        cat_entries = group_entries[category]
         for e in cat_entries:
             t = team_for(e["question"])
             if t and t not in teams:
                 teams.append(t)
     ranked = sorted(teams, key=lambda t: ELO.get(t, 0), reverse=True)
-    return (ranked.index(team) + 1, len(ranked))
+    return (ranked.index(team) + 1 if len(ranked) == 4 and team in ranked else None,
+            len(ranked))
 
 
 def assess_risk(category, price, rank, n_known, tradeable):
@@ -82,8 +86,11 @@ def assess_risk(category, price, rank, n_known, tradeable):
             score -= 1            # strong, already-leading favorite -> safer
 
     # Elo rank within the group.
+    if n_known != 4:
+        flags.append(f"incomplete or ambiguous group coverage ({n_known}/4 teams)")
+        score += 1
     if rank is None:
-        flags.append("team unmapped (no Elo anchor)")
+        flags.append("team unmapped or group rank unavailable (no Elo anchor)")
         score += 1
     elif rank == 1:
         score -= 1               # group favorite
@@ -92,8 +99,11 @@ def assess_risk(category, price, rank, n_known, tradeable):
         score += 1
 
     if not tradeable:
-        flags.append("not tradeable yet (importable-only — watch for Simmer import)")
+        flags.append("not tradeable yet (requires an active market and valid price)")
         score = max(score, 1)    # never LOW if you can't actually place it today
+
+    if price is None or n_known != 4:
+        score = max(score, 1)
 
     score = max(0, min(2, score))
     tier = _TIER_BY_SCORE[score]
@@ -203,7 +213,7 @@ def _fmt_rec(r):
     if r["flags"]:
         lines.append("      Flags: " + "; ".join(r["flags"]))
     if not r["tradeable"]:
-        lines.append("      ⚠ Not yet tradeable on Simmer (importable upstream — watch for import).")
+        lines.append("      ⚠ Not yet tradeable on Simmer (requires an active market and valid price).")
     return "\n".join(lines)
 
 

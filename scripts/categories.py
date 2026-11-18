@@ -30,12 +30,26 @@ GROUP_LETTERS = [chr(c) for c in range(ord("A"), ord("L") + 1)]  # 2026 = Groups
 # A bare "Group X" letter anywhere in the title (A..L only — M+ are not 2026 groups).
 _GROUP_LETTER_RE = re.compile(r"\bgroup\s+([A-L])\b", re.IGNORECASE)
 
-# Advancement family — a team reaching the knockout stage out of its group (2 of 4 advance).
+# Only an affirmative, single-team proposition is safe to endorse as a qualifier.
+# Full matching deliberately leaves negations, compound bets and extra conditions as props.
 _QUALIFIER_RE = re.compile(
-    r"advanc|qualif|knockout|reach(?:es)?|round\s+of\s+(?:32|16)|through\s+to|"
-    r"progress|make\s+the\s+(?:last|knockout)",
+    r"(?:will\s+)?(?P<team>.+?)\s+(?:to\s+)?"
+    r"(?:advance|qualify|progress|reach\s+the\s+knockout(?:\s+stage)?|"
+    r"make\s+the\s+knockout(?:\s+stage)?)\s+from\s+"
+    r"(?:the\s+)?(?:world\s+cup\s+)?group\s+[A-L]\s*\??",
     re.IGNORECASE,
 )
+
+
+def _is_single_team_qualifier(question):
+    from strategy import ELO, _TEAM_ALIASES
+    match = _QUALIFIER_RE.fullmatch(question.strip())
+    if not match:
+        return False
+    subject = match.group("team").casefold()
+    names = {_norm(name).casefold() for name in (*ELO, *_TEAM_ALIASES)}
+    return subject in names
+
 
 # Context that confirms a generic "Group X" title is actually a World-Cup market (guards props
 # against unrelated "group" usage when scanning the whole active venue).
@@ -69,7 +83,7 @@ def classify_market(question, source=None):
     if not letter:
         return (None, None)
 
-    if _QUALIFIER_RE.search(q):
+    if _is_single_team_qualifier(q):
         return ("qualifier", letter)
 
     wc_context = source == "importable" or _WC_CONTEXT_RE.search(q) or _names_a_known_team(q)

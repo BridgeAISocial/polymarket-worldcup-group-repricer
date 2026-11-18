@@ -216,3 +216,63 @@ def test_summary_counts_by_risk():
     s = rec.summarize(recs)
     assert s["by_risk"][rec.FLAGGED] >= 1
     assert s["total_stake_usd"] == s["total"] * 5.0
+
+
+# Regression coverage for private review findings.
+def test_qualifier_specials_remain_flagged_props():
+    questions = [
+        "Will Argentina fail to advance from Group A?",
+        "Will Argentina not advance from Group A?",
+        "Will Argentina and France both advance from Group A?",
+        "Will Argentina advance from Group A without conceding?",
+        "Will Argentina reach the round of 16 from Group A?",
+    ]
+    for question in questions:
+        assert classify_market(question) == ("prop", "A")
+        recommendations = rec.build_recommendations(
+            _disc_from(active=[amarket(1, question, yes_price=0.7)]))
+        assert recommendations["A"][0]["risk"] == rec.FLAGGED
+
+
+def test_qualifier_alias_subjects_are_supported():
+    for name in ("South Korea", "United States", "Côte d'Ivoire", "The Netherlands"):
+        assert classify_market(f"Will {name} advance from Group A?") == ("qualifier", "A")
+
+
+def test_partial_coverage_cannot_establish_a_group_favorite():
+    for price in (0.4, 0.9):
+        recommendations = rec.build_recommendations(_disc_from(active=[
+            amarket(1, "Will Jordan advance from Group A?", yes_price=price)]))
+        pick = recommendations["A"][0]
+        assert pick["elo_rank"] is None
+        assert pick["risk"] != rec.LOW
+        assert any("coverage" in flag for flag in pick["flags"])
+
+
+def test_props_cannot_complete_group_ranking():
+    recommendations = rec.build_recommendations(_disc_from(active=[
+        amarket(1, "Jordan advance from Group A", yes_price=0.8),
+        amarket(2, "Argentina most goals in Group A", yes_price=0.5),
+        amarket(3, "France most goals in Group A", yes_price=0.5),
+        amarket(4, "Spain most goals in Group A", yes_price=0.5)]))
+    pick = next(r for r in recommendations["A"] if r["category"] == "qualifier")
+    assert pick["elo_rank"] is None
+    assert pick["risk"] != rec.LOW
+
+
+def test_unpriced_favorite_is_not_actionable_even_with_complete_coverage():
+    from daily_recommender import _filter_by_risk
+    for price in (None, 0, 1, -0.1, 1.1, float("nan"), float("inf"), True):
+        recommendations = rec.build_recommendations(_disc_from(active=[
+            amarket(1, "Argentina advance from Group A", yes_price=price),
+            amarket(2, "France advance from Group A", yes_price=0.7),
+            amarket(3, "Jordan advance from Group A", yes_price=0.3),
+            amarket(4, "Panama advance from Group A", yes_price=0.2)]))
+        pick = recommendations["A"][0]
+        assert pick["elo_rank"] == 1
+        assert pick["price"] is None
+        assert not pick["tradeable"]
+        assert pick["risk"] != rec.LOW
+        assert pick["payout"] == ""
+        assert pick not in _filter_by_risk(recommendations, "low")["A"]
+        assert "importable upstream" not in rec._fmt_rec(pick)

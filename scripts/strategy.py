@@ -27,21 +27,54 @@ def ask_price(market):
 
 
 # --- Elo anchor (tiebreak ONLY — never a standalone winner-pick) -------------------------------
+# Static, approximate strength anchors for the 2026 field. These are NOT predictions; they only
+# rank teams *within a group* so the qualifier/winner recommender can say which leg is the
+# structural favorite. Ratings are deliberately coarse and Autoresearch-tunable.
 ELO = {
-    "Spain": 2080, "France": 2100, "Argentina": 2140, "England": 2030, "Brazil": 2030,
-    "Portugal": 2000, "Netherlands": 1990, "Germany": 1960, "Belgium": 1900, "Croatia": 1880,
-    "Italy": 1880, "Uruguay": 1880, "Colombia": 1860, "Morocco": 1850, "USA": 1790,
-    "Mexico": 1760, "Japan": 1840, "Korea": 1780, "Senegal": 1790, "Switzerland": 1830,
+    # Top tier
+    "Argentina": 2140, "France": 2100, "Spain": 2080, "England": 2030, "Brazil": 2030,
+    "Portugal": 2000, "Netherlands": 1990, "Germany": 1960, "Belgium": 1900,
+    # Strong
+    "Croatia": 1880, "Italy": 1880, "Uruguay": 1880, "Colombia": 1860, "Morocco": 1850,
+    "Switzerland": 1830, "Japan": 1840, "Denmark": 1820, "Mexico": 1760, "USA": 1790,
+    "Senegal": 1790, "Korea": 1780, "Austria": 1800, "Ecuador": 1780, "Ukraine": 1770,
+    # Mid
+    "Australia": 1740, "Canada": 1740, "Iran": 1740, "Serbia": 1760, "Poland": 1750,
+    "Egypt": 1720, "Nigeria": 1720, "Ivory Coast": 1710, "Algeria": 1710, "Norway": 1760,
+    "Sweden": 1730, "Turkey": 1750, "Wales": 1720, "Scotland": 1710, "Peru": 1700,
+    "Paraguay": 1690, "Chile": 1700, "Tunisia": 1690, "Cameroon": 1690, "Ghana": 1690,
+    "Qatar": 1660, "Saudi Arabia": 1660, "Costa Rica": 1660, "Panama": 1640, "Jamaica": 1640,
+    "South Africa": 1650, "Cape Verde": 1640, "Jordan": 1630, "Uzbekistan": 1660,
+    "New Zealand": 1600, "Venezuela": 1670, "Bolivia": 1620,
+}
+
+# Common aliases so question text in either form resolves to the same anchor.
+_TEAM_ALIASES = {
+    "south korea": "Korea", "korea republic": "Korea", "republic of korea": "Korea",
+    "usmnt": "USA", "united states": "USA", "u.s.": "USA",
+    "ivory coast": "Ivory Coast", "cote d'ivoire": "Ivory Coast", "côte d'ivoire": "Ivory Coast",
+    "the netherlands": "Netherlands", "holland": "Netherlands",
 }
 
 
+def team_for(question):
+    """Return the canonical team name named in a question, or None. Longest match wins so
+    'Saudi Arabia' isn't shadowed by a shorter substring."""
+    q = (question or "").lower()
+    for alias, canon in _TEAM_ALIASES.items():
+        if alias in q:
+            return canon
+    best = None
+    for team in ELO:
+        if team.lower() in q and (best is None or len(team) > len(best)):
+            best = team
+    return best
+
+
 def elo_lean(question):
-    """Rough anchor score for a 'win Group X' leg from the team named in the question."""
-    q = question or ""
-    for team, rating in ELO.items():
-        if team.lower() in q.lower():
-            return rating
-    return 0  # unknown team -> no lean
+    """Rough anchor score for a leg from the team named in the question (0 if unknown)."""
+    team = team_for(question)
+    return ELO.get(team, 0) if team else 0
 
 
 def repricing_decisions(legs, held_ids, cfg):

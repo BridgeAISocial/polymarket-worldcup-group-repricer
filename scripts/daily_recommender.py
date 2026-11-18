@@ -19,6 +19,7 @@ import argparse
 import json
 import os
 import sys
+from contextlib import redirect_stdout
 from datetime import date as _date
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -48,7 +49,9 @@ def run(venue="sim", live=False, as_json=False, out=None, max_risk="all"):
     today = _date.today().isoformat()
     client = _make_client(venue, live)
 
-    disc = discover_all(client)
+    # Discovery retries are diagnostics, including when stdout is a JSON document.
+    with redirect_stdout(sys.stderr):
+        disc = discover_all(client)
     recs_by_group = rec.build_recommendations(disc, cfg)
     if max_risk != "all":
         recs_by_group = _filter_by_risk(recs_by_group, max_risk)

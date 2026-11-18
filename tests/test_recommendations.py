@@ -309,3 +309,29 @@ def test_qualifier_limit_counts_distinct_teams_and_prefers_actionable_market():
     assert picks[0]["market_id"] == 2
     assert all(r["tradeable"] for r in picks)
     assert sum(r["stake_usd"] for r in picks) == 10
+
+
+def test_json_stdout_survives_discovery_retries(monkeypatch, capsys):
+    import json
+    import daily_recommender as daily
+
+    class RetryingClient(FakeClient):
+        def get_markets(self, status="active", import_source=None, limit=50, include=None):
+            if limit == 5000:
+                raise RuntimeError("transient active timeout")
+            return super().get_markets(status, import_source, limit, include)
+
+        def list_importable_markets(self, q=None, limit=50, min_volume=0):
+            if q == "World Cup":
+                raise RuntimeError("transient importable timeout")
+            return super().list_importable_markets(q, limit, min_volume)
+
+    client = RetryingClient(active=[
+        amarket(1, "Argentina advance from Group A", yes_price=0.7)])
+    monkeypatch.setattr(daily, "_make_client", lambda venue, live: client)
+    daily.run(as_json=True)
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["summary"]["total"] == 1
+    assert "transient active timeout" in captured.err
+    assert "transient importable timeout" in captured.err

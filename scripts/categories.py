@@ -41,9 +41,17 @@ _QUALIFIER_RE = re.compile(
 )
 
 
-def _is_single_team_qualifier(question):
+_SINGLE_WINNER_RE = re.compile(
+    r"(?:will\s+)?(?P<team>.+?)\s+(?:to\s+)?"
+    r"(?:wins?|finish(?:es)?\s+first|tops?)\s+"
+    r"(?:in\s+)?(?:the\s+)?(?:world\s+cup\s+)?group\s+[A-L]\s*\??",
+    re.IGNORECASE,
+)
+
+
+def _is_single_team_proposition(question, pattern):
     from strategy import ELO, _TEAM_ALIASES
-    match = _QUALIFIER_RE.fullmatch(question.strip())
+    match = pattern.fullmatch(question.strip())
     if not match:
         return False
     subject = match.group("team").casefold()
@@ -76,14 +84,14 @@ def classify_market(question, source=None):
         return (None, None)
 
     winner = extract_group_letter(q)            # strict winner-family matcher
-    if winner:
+    if winner and _is_single_team_proposition(q, _SINGLE_WINNER_RE):
         return ("winner", winner)
 
     letter = group_letter(q)
     if not letter:
         return (None, None)
 
-    if _is_single_team_qualifier(q):
+    if _is_single_team_proposition(q, _QUALIFIER_RE):
         return ("qualifier", letter)
 
     wc_context = source == "importable" or _WC_CONTEXT_RE.search(q) or _names_a_known_team(q)

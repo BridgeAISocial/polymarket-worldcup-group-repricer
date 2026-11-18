@@ -155,7 +155,17 @@ def _recommend_entry(entry, category, group_entries, cfg):
 
 
 def _by_elo(entries):
-    return sorted(entries, key=lambda e: ELO.get(team_for(e["question"]) or "", 0), reverse=True)
+    # Select one market per canonical team before applying the per-group cap.
+    # An active priced market is preferable to an unpriced or importable equivalent.
+    preferred = sorted(entries, key=lambda e: (_tradeable(e), _price_of(e) is not None),
+                       reverse=True)
+    unique = {}
+    for entry in preferred:
+        team = team_for(entry["question"])
+        key = team or entry["question"]
+        unique.setdefault(key, entry)
+    return sorted(unique.values(), key=lambda e: ELO.get(team_for(e["question"]) or "", 0),
+                  reverse=True)
 
 
 def recommend_for_group(letter, group_entries, cfg):

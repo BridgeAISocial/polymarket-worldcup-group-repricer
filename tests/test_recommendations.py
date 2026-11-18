@@ -276,3 +276,36 @@ def test_unpriced_favorite_is_not_actionable_even_with_complete_coverage():
         assert pick["payout"] == ""
         assert pick not in _filter_by_risk(recommendations, "low")["A"]
         assert "importable upstream" not in rec._fmt_rec(pick)
+
+
+def test_winner_specials_remain_flagged_props():
+    for question in (
+        "Will Argentina not win Group A?",
+        "Will Argentina and France win Group A?",
+        "Will Argentina win Group A without conceding?",
+    ):
+        assert classify_market(question) == ("prop", "A")
+        recommendations = rec.build_recommendations(_disc_from(active=[
+            amarket(1, question, yes_price=0.7),
+            amarket(2, "France win Group A", yes_price=0.5),
+            amarket(3, "Jordan win Group A", yes_price=0.2),
+            amarket(4, "Panama win Group A", yes_price=0.1)]))
+        pick = next(r for r in recommendations["A"] if r["question"] == question)
+        assert pick["risk"] == rec.FLAGGED
+        assert "to win the group" not in pick["thesis"]
+
+
+def test_qualifier_limit_counts_distinct_teams_and_prefers_actionable_market():
+    recommendations = rec.build_recommendations(_disc_from(
+        active=[
+            amarket(1, "Argentina advance from Group A"),
+            amarket(2, "Argentina qualify from Group A", yes_price=0.7),
+            amarket(3, "France advance from Group A", yes_price=0.65),
+            amarket(4, "Jordan advance from Group A", yes_price=0.3),
+            amarket(5, "Panama advance from Group A", yes_price=0.2)],
+        importable=[amarket(6, "Will Argentina advance from Group A?", yes_price=0.8)]))
+    picks = recommendations["A"]
+    assert [r["team"] for r in picks] == ["Argentina", "France"]
+    assert picks[0]["market_id"] == 2
+    assert all(r["tradeable"] for r in picks)
+    assert sum(r["stake_usd"] for r in picks) == 10
